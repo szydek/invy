@@ -1,9 +1,10 @@
 import sqlite3, os, json
 import requests
 from urllib.parse import urlparse
-from flask import Flask, render_template_string, request, redirect, url_for, jsonify, send_from_directory
+from flask import Flask, render_template, request, redirect, url_for, jsonify, send_from_directory
 from flask.helpers import flash
 from flask import send_from_directory
+
 
 app = Flask(__name__)
 
@@ -284,33 +285,62 @@ def get_existing_artists_and_genres():
     return artists, genres
 
 
-@app.route('/')
+@app.route("/")
 def index():
-    """Render the homepage with the list of albums."""
+    # optional: keep / as Albums “home”
+    return redirect(url_for("albums_page"))
+
+
+@app.route("/albums")
+def albums_page():
+    """Render the Albums page with the list of albums."""
     conn = sqlite3.connect(DATABASE)
     cursor = conn.cursor()
-    cursor.execute('SELECT * FROM albums ORDER BY artist, title')
+    cursor.execute("SELECT * FROM albums ORDER BY artist, title")
     rows = cursor.fetchall()
     conn.close()
 
     # Group albums by artist
     albums = {}
+    genres = set()
+
     for row in rows:
         artist = row[1]
+        genre = row[4] or ""
+        if genre.strip():
+            genres.add(genre.strip())
+
         album = {
-            'id': row[0],
-            'title': row[2],
-            'release_date': row[3],
-            'genre': row[4],
-            'stream_link': row[5],
-            'notes': row[6],
-            'mp3_file': row[7],
-            'formats': json.loads(row[9]) if row[9] and isinstance(row[9], str) else [], # Safely parse JSON, default to empty list
-            'cover_image': row[10]
+            "id": row[0],
+            "title": row[2],
+            "release_date": row[3],
+            "genre": row[4],
+            "stream_link": row[5],
+            "notes": row[6],
+            "mp3_file": row[7],
+            "formats": json.loads(row[9]) if row[9] and isinstance(row[9], str) else [],
+            "cover_image": row[10],
         }
         albums.setdefault(artist, []).append(album)
 
-    return render_template_string(open("index.html").read(), albums=albums)
+    unique_genres = sorted(genres, key=lambda s: s.lower())
+
+    return render_template("albums.html", albums=albums, unique_genres=unique_genres)
+
+
+@app.route("/gear")
+def gear_page():
+    return render_template("gear.html")
+
+
+@app.route("/household")
+def household_page():
+    return render_template("household.html")
+
+
+@app.route("/local")
+def local_page():
+    return render_template("local.html")
 
 
 @app.route('/add', methods=['GET', 'POST'])
@@ -357,7 +387,7 @@ def add_album():
 
     # Get existing artists and genres for dropdowns
     artists, genres = get_existing_artists_and_genres()
-    return render_template_string(open("add.html").read(), artists=artists, genres=genres)
+    return render_template("add.html", artists=artists, genres=genres)
 
 
 @app.route('/edit/<int:album_id>', methods=['GET', 'POST'])
@@ -367,83 +397,67 @@ def edit_album(album_id):
     cursor = conn.cursor()
 
     if request.method == 'POST':
-        # Update the album details in the database
         artist = request.form['artist']
         title = request.form['title']
         release_date = request.form['release_date']
         genre = request.form['genre']
         stream_link = request.form['stream_link']
         notes = request.form['notes']
-        # Optionally update the cover image
-        cover_image_path = None
 
-        if request.form.get('fetch_cover') == 'on':  # checkbox to indicate cover fetching
+        # Cover image handling (keep current unless fetch_cover is on)
+        cover_image_path = None
+        if request.form.get('fetch_cover') == 'on':
             cover_image_path = fetch_thumbnail_from_discogs(artist, title)
         else:
             cursor.execute('SELECT cover_image FROM albums WHERE id = ?', (album_id,))
             result = cursor.fetchone()
-            if result:  # Ensure there's a result
-                cover_image_path = result[0]  # Extract the first element (cover_image path)
-            else:
-                cover_image_path = None  # Handle the case where no cover image is found
-
-        print(cover_image_path)
-
+            cover_image_path = result[0] if result else None
 
         # Handle file upload
-        mp3_file = request.files['mp3_file']
+        mp3_file = request.files.get('mp3_file')
         mp3_filename = None
-        
-        # If a new MP3 file is uploaded, save it
-        if mp3_file and mp3_file.filename.endswith('.mp3'):
+
+        if mp3_file and mp3_file.filename and mp3_file.filename.lower().endswith('.mp3'):
             mp3_filename = f"{artist}-{title}.mp3".replace(" ", "_")
             mp3_path = os.path.join(app.config['UPLOAD_FOLDER'], mp3_filename)
             mp3_file.save(mp3_path)
         else:
-            # If no new MP3 file is uploaded, keep the old file
             cursor.execute('SELECT mp3_file FROM albums WHERE id = ?', (album_id,))
             current_mp3 = cursor.fetchone()
-            if current_mp3:
-                mp3_filename = current_mp3[0]
+            mp3_filename = current_mp3[0] if current_mp3 else None
 
-        # Handle formats (make sure it's a list)
-        selected_formats = request.form.getlist('formats')  # This will be a list of formats from the form
-        if selected_formats:  # If new formats were submitted
-            formats_json = json.dumps(selected_formats)  # Convert the list to JSON
+        # Handle formats
+        selected_formats = request.form.getlist('formats')
+        if selected_formats:
+            formats_json = json.dumps(selected_formats)
         else:
-            # If no new formats were submitted, retain the current formats
             cursor.execute('SELECT formats FROM albums WHERE id = ?', (album_id,))
             current_formats = cursor.fetchone()
-            if current_formats:
-                formats_json = current_formats[0]  # Keep the existing formats
-
-        # # Handle the 'formats' field, assuming it's a list of selected formats
-        # selected_formats = request.form.getlist('formats')
-        # formats_json = json.dumps(selected_formats)  # Convert list to JSON string
-
-        print(f"Album ID {album_id}: Formats changed to {formats_json}")
-        
+            formats_json = current_formats[0] if current_formats else json.dumps([])
 
         cursor.execute('''
             UPDATE albums
             SET artist = ?, title = ?, release_date = ?, genre = ?, stream_link = ?, notes = ?, mp3_file = ?, formats = ?, cover_image = ?
             WHERE id = ?
-        ''', (artist, title, release_date, genre, stream_link, notes, mp3_filename , formats_json,  cover_image_path, album_id))
+        ''', (artist, title, release_date, genre, stream_link, notes, mp3_filename, formats_json, cover_image_path, album_id))
+
         conn.commit()
         conn.close()
-        return redirect(url_for('index'))
+        return redirect(url_for('albums_page'))
 
-    # Fetch the album details for pre-filling the form
+    # GET: Fetch album details for pre-filling the form
     cursor.execute('SELECT * FROM albums WHERE id = ?', (album_id,))
     album = cursor.fetchone()
     conn.close()
 
-    # Convert the formats column from JSON string to a Python list
-    formats = json.loads(album[8]) if album[8] and isinstance(album[8], str) else []   # Parse formats from JSON
+    if not album:
+        return "Album not found", 404
 
+    # IMPORTANT: formats is column 9 in your schema usage elsewhere
+    formats = json.loads(album[9]) if album[9] and isinstance(album[9], str) else []
 
-    # Get existing artists and genres for dropdowns
     artists, genres = get_existing_artists_and_genres()
+
     album_data = {
         'id': album[0],
         'artist': album[1],
@@ -453,9 +467,12 @@ def edit_album(album_id):
         'stream_link': album[5],
         'notes': album[6],
         'mp3_file': album[7],
-        'formats': formats
+        'formats': formats,
+        'cover_image': album[10],  # matches your index/albums template
     }
-    return render_template_string(open("edit.html").read(), album=album_data, artists=artists, genres=genres)
+
+    return render_template("edit.html", album=album_data, artists=artists, genres=genres)
+
 
 @app.route('/delete/<int:album_id>', methods=['POST'])
 def delete_album(album_id):

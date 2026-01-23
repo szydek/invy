@@ -1,0 +1,268 @@
+{% extends "base.html" %}
+
+{% block title %}Album Collection{% endblock %}
+
+{% block head %}
+<style>
+    .artist {
+        cursor: pointer;
+        background-color: #f0f0f0;
+        padding: 10px;
+        border: 1px solid #ccc;
+        margin: 5px 0;
+    }
+
+    .album-list {
+        display: none;
+        margin: 10px 0;
+    }
+
+    .album-list table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .album-list table th, .album-list table td {
+        border: 1px solid #ddd;
+        padding: 8px;
+    }
+
+    .album-list table th {
+        background-color: #f9f9f9;
+    }
+
+    .edit-btn {
+        background-color: #4CAF50;
+        color: white;
+        padding: 5px 10px;
+        border: none;
+        cursor: pointer;
+        text-decoration: none;
+    }
+
+    .edit-btn:hover {
+        background-color: #45a049;
+    }
+
+    #filter-input {
+        margin-bottom: 15px;
+        padding: 10px;
+        width: 300px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1>Album Collection</h1>
+
+<!-- Filter Input -->
+<input type="text" id="filter-input" placeholder="Filter by artist or album" onkeyup="filterAlbums()">
+
+  <a href="{{ url_for('add_album') }}">add</a>
+  <a href="{{ url_for('wiki') }}">wiki</a>
+
+<button onclick="expandAll()">Expand All</button>
+<button onclick="collapseAll()">Collapse All</button>
+
+<label for="genre-filter">Filter by Genre:</label>
+<select id="genre-filter" onchange="filterAlbums()">
+    <option value="">All Genres</option>
+    {% for genre in unique_genres %}
+        <option value="{{ genre }}">{{ genre }}</option>
+    {% endfor %}
+</select>
+
+{% for artist, albums_by_artist in albums.items() %}
+    <div class="artist" onclick="toggleAlbums('{{ artist | replace(' ', '_') }}')">
+        {{ artist }}
+    </div>
+    <div id="{{ artist | replace(' ', '_') }}" class="album-list">
+        <table>
+            <thead>
+                <tr>
+                    <th onclick="sortTable(this, 0)">Artwork</th>
+                    <th onclick="sortTable(this, 1)">Title</th>
+                    <th onclick="sortTable(this, 2)">Release Date</th>
+                    <th onclick="sortTable(this, 3)">Genre</th>
+                    <th onclick="sortTable(this, 4)">MyFormats</th>
+                    <th onclick="sortTable(this, 5)">Audio / Stream</th>
+                    <th onclick="sortTable(this, 6)">Notes</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for album in albums_by_artist %}
+                    <tr class="album-entry">
+                        <td>
+                            {% if album.cover_image %}
+                            <img src="{{ url_for('static', filename='thumbnails/' + album.cover_image ) }}" alt="-" style="max-width: 200px; max-height: 200px;">
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td class="album-title">{{ album.title }}</td>
+                        <td>{{ album.release_date }}</td>
+                        <td>{{ album.genre }}</td>
+                        <td>
+                            {% if album.formats %}
+                                <ul>
+                                {% for format in album.formats %}
+                                    <li>{{ format }}</li>
+                                {% endfor %}
+                                </ul>
+                            {% else %}
+                                No formats listed.
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if album.mp3_file %}
+                            <audio controls>
+                                <source src="{{ url_for('static', filename='audio/' + album.mp3_file) }}" type="audio/mpeg">
+                                Your browser does not support the audio element.
+                            </audio>
+                            {% else %}
+                                -
+                            {% endif %}
+
+                            {% if album.stream_link %}
+                            <a href="{{ album.stream_link }}" target="_blank" rel="noopener">Ref</a>
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>{{ album.notes }}</td>
+                        <td>
+                            <a class="edit-btn" href="/edit/{{ album.id }}">Edit</a>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endfor %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let sortOrders = {}; // Keep track of sorting order for each column
+
+    function sortTable(header, columnIndex) {
+        const table = header.closest("table");
+        const tbody = table.querySelector("tbody");
+        const rows = Array.from(tbody.querySelectorAll(".album-entry"));
+
+        // Determine sorting order (toggle if the same column is clicked)
+        sortOrders[columnIndex] = sortOrders[columnIndex] === "asc" ? "desc" : "asc";
+        const isAscending = sortOrders[columnIndex] === "asc";
+
+        // Sort rows based on column index
+        rows.sort((rowA, rowB) => {
+            let cellA = rowA.cells[columnIndex].textContent.trim();
+            let cellB = rowB.cells[columnIndex].textContent.trim();
+
+            // Convert numbers and dates for proper sorting
+            if (!isNaN(cellA) && !isNaN(cellB)) {
+                return isAscending ? cellA - cellB : cellB - cellA;
+            }
+            if (Date.parse(cellA) && Date.parse(cellB)) {
+                return isAscending ? new Date(cellA) - new Date(cellB) : new Date(cellB) - new Date(cellA);
+            }
+
+            return isAscending ? cellA.localeCompare(cellB) : cellB.localeCompare(cellA);
+        });
+
+        // Re-add sorted rows to tbody
+        tbody.innerHTML = "";
+        rows.forEach(row => tbody.appendChild(row));
+    }
+
+    document.addEventListener("DOMContentLoaded", function () {
+        restoreExpansionState();
+        restoreFilterState();
+    });
+
+    function toggleAlbums(artistId) {
+        const albumList = document.getElementById(artistId);
+        const isExpanded = albumList.style.display === 'block';
+
+        albumList.style.display = isExpanded ? 'none' : 'block';
+
+        saveExpansionState();
+    }
+
+    function expandAll() {
+        document.querySelectorAll('.album-list').forEach(albumList => {
+            albumList.style.display = 'block';
+        });
+
+        saveExpansionState();
+    }
+
+    function collapseAll() {
+        document.querySelectorAll('.album-list').forEach(albumList => {
+            albumList.style.display = 'none';
+        });
+
+        saveExpansionState();
+    }
+
+    function filterAlbums() {
+        const filter = document.getElementById('filter-input').value.toLowerCase();
+        const selectedGenre = document.getElementById('genre-filter').value.toLowerCase();
+        const artistDivs = document.querySelectorAll('.artist');
+
+        artistDivs.forEach(artistDiv => {
+            const artistName = artistDiv.textContent.toLowerCase();
+            const albumList = artistDiv.nextElementSibling;
+            const albums = albumList.querySelectorAll('.album-entry');
+            let artistMatches = false;
+
+            albums.forEach(album => {
+                const albumTitle = album.querySelector('.album-title').textContent.toLowerCase();
+                const albumGenre = album.cells[3].textContent.toLowerCase();
+
+                const matchesFilter = artistName.includes(filter) || albumTitle.includes(filter);
+                const matchesGenre = selectedGenre === "" || albumGenre.includes(selectedGenre);
+
+                if (matchesFilter && matchesGenre) {
+                    album.style.display = 'table-row';
+                    artistMatches = true;
+                } else {
+                    album.style.display = 'none';
+                }
+            });
+
+            artistDiv.style.display = artistMatches ? 'block' : 'none';
+            albumList.style.display = artistMatches ? 'block' : 'none';
+        });
+    }
+
+    function restoreFilterState() {
+        const savedFilter = localStorage.getItem("filterText");
+        if (savedFilter) {
+            document.getElementById('filter-input').value = savedFilter;
+            filterAlbums();
+        }
+    }
+
+    function saveExpansionState() {
+        const expandedArtists = [];
+        document.querySelectorAll('.album-list').forEach(albumList => {
+            if (albumList.style.display === 'block') {
+                expandedArtists.push(albumList.id);
+            }
+        });
+        localStorage.setItem("expandedArtists", JSON.stringify(expandedArtists));
+    }
+
+    function restoreExpansionState() {
+        const expandedArtists = JSON.parse(localStorage.getItem("expandedArtists")) || [];
+        expandedArtists.forEach(artistId => {
+            const albumList = document.getElementById(artistId);
+            if (albumList) {
+                albumList.style.display = 'block';
+            }
+        });
+    }
+</script>
+{% endblock %}
