@@ -1,0 +1,142 @@
+<h1>Add Album</h1>
+<form action="/add" method="POST" enctype="multipart/form-data" id="add-album-form">
+    <!-- Artist -->
+    <label for="artist">Artist:</label>
+    <input list="artist-list" name="artist" id="artist" required>
+    <datalist id="artist-list">
+        {% for artist in artists %}
+        <option value="{{ artist }}">
+        {% endfor %}
+    </datalist>
+    <br>
+
+    <!-- Title -->
+    <label for="title">Title:</label>
+    <input type="text" name="title" id="title" required>
+    <br>
+
+    <!-- Fetch Details Button -->
+    <button type="button" id="fetch-details">Fetch Details from Discogs</button>
+    <br><br>
+
+    <!-- Release Date -->
+    <label for="release_date">Release Date:</label>
+    <input type="text" name="release_date" id="release_date">
+    <br>
+
+    <!-- Genre -->
+    <label for="genre">Genre:</label>
+    <input list="genre-list" name="genre" id="genre" required>
+    <datalist id="genre-list">
+        {% for genre in genres %}
+        <option value="{{ genre }}">
+        {% endfor %}
+    </datalist>
+    <br>
+
+    <!-- Album Cover -->
+    <label>Album Cover:</label>
+    <img id="album-cover" src="#" alt="Album Cover" style="display:none; max-width: 200px;">
+    <br>
+
+    <!-- Album Cover URL -->
+    <label for="album_cover">Album Cover URL:</label>
+    <input type="text" name="cover_url" id="cover_url">
+    <br>
+
+    <label for="formats">MyFormats:</label><br>
+    <select name="formats" multiple>
+        <option value="CD" >CD</option>
+        <option value="Cassette" >Cassette</option>
+        <option value="Vinyl" >Vinyl</option>
+        <option value="Digital" >Digital</option>
+        <!-- Add other formats as necessary --> 
+    </select><br>
+
+    <!-- Stream Link -->
+    <label for="stream_link">Stream Link:</label>
+    <input type="url" name="stream_link">
+    <br>
+
+    <!-- MP3 Upload -->
+    <label for="mp3_file">Upload MP3:</label>
+    <input type="file" name="mp3_file" accept=".mp3">
+    <br>
+
+    <!-- Notes -->
+    <label for="notes">Notes:</label>
+    <textarea name="notes"></textarea>
+    <br>
+
+    <button type="submit">Add</button>
+</form>
+
+
+<script>
+    document.getElementById('fetch-details').addEventListener('click', async () => {
+    const artist = document.getElementById('artist').value;
+    const title = document.getElementById('title').value;
+
+    if (!artist || !title) {
+        alert("Please fill in both artist and title to fetch details.");
+        return;
+    }
+
+    try {
+        const response = await fetch(`/fetch_discogs?artist=${encodeURIComponent(artist)}&title=${encodeURIComponent(title)}`);
+        const data = await response.json();
+
+        if (data.success) {
+            // Check if the title includes the artist with a " - " separator
+            if (data.title.includes(" - ")) {
+                const [fetchedArtist, fetchedTitle] = data.title.split(" - ");
+                document.getElementById('artist').value = fetchedArtist.trim();
+                document.getElementById('title').value = fetchedTitle.trim();
+            } else {
+                // If no " - ", just update the title
+                document.getElementById('title').value = data.title.trim();
+            }
+
+            // Populate other fields
+            document.getElementById('release_date').value = data.release_date;
+            document.getElementById('genre').value = data.genre;
+            document.getElementById('cover_url').value = data.album_cover;
+
+            // Show album cover
+            const albumCover = document.getElementById('album-cover');
+            albumCover.src = data.album_cover;
+            albumCover.style.display = 'block';
+        } else {
+            alert("No results found on Discogs.");
+        }
+    } catch (error) {
+        console.error("Error fetching Discogs data:", error);
+        alert("An error occurred while fetching details.");
+    }
+});
+</script>
+
+<button type="button" id="fetch-collection">Sync Collection with DB</button>
+
+<script>
+    document.getElementById('fetch-collection').addEventListener('click', async () => {
+        try {
+            const response = await fetch('/sync_collection', {
+                method: 'POST', // Specify POST method
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({}) // Send any data if required
+            });
+            const result = await response.json();
+            if (result.success) {
+                alert("Collection successfully synced!");
+            } else {
+                alert("An error occurred while syncing the collection.");
+            }
+        } catch (error) {
+            console.error("Error syncing collection:", error);
+            alert("Failed to sync collection.");
+        }
+    });
+</script>
+<br><br>
+<a href="/">Back to list</a>

@@ -1,0 +1,85 @@
+<h1>Edit Album</h1>
+<form action="/edit/{{ album['id'] }}" method="POST" enctype="multipart/form-data">
+    Artist:
+    <select name="artist">
+        {% for artist in artists %}
+        <option value="{{ artist }}" {% if artist == album['artist'] %}selected{% endif %}>{{ artist }}</option>
+        {% endfor %}
+    </select>
+    <br>
+    Title: <input type="text" name="title" value="{{ album['title'] }}"><br>
+    Release Date: <input type="text" name="release_date" value="{{ album['release_date'] }}"><br>
+    Genre:
+    <select name="genre">
+        {% for genre in genres %}
+        <option value="{{ genre }}" {% if genre == album['genre'] %}selected{% endif %}>{{ genre }}</option>
+        {% endfor %}
+    </select>
+    <br>
+    Stream Link: <input type="url" name="stream_link" value="{{ album['stream_link'] }}"><br>
+    <label for="mp3_file">Upload MP3:</label>
+    <input type="file" name="mp3_file" accept=".mp3"><br>
+
+    {% if album['mp3_file'] %}
+        <p>Current file: <a href="{{ url_for('media', filename=album['mp3_file']) }}" target="_blank">{{ album['mp3_file'] }}</a></p>
+    {% endif %}
+    <label for="formats">MyFormats:</label><br>
+    <select name="formats" multiple>
+        <option value="CD" {% if 'CD' in album['formats'] %}selected{% endif %}>CD</option>
+        <option value="Cassette" {% if 'Cassette' in album['formats'] %}selected{% endif %}>Cassette</option>
+        <option value="Vinyl" {% if 'Vinyl' in album['formats'] %}selected{% endif %}>Vinyl</option>
+        <option value="Digital" {% if 'Digital' in album['formats'] %}selected{% endif %}>Digital</option>
+        <!-- Add other formats as necessary --> 
+    </select><br>
+    Notes: <textarea name="notes">{{ album['notes'] }}</textarea><br>
+
+    <!-- Display existing thumbnail -->
+    {% if album['thumbnail'] %}
+        <label for="current_thumbnail">Current Thumbnail:</label>
+        <img src="{{ album['thumbnail'] }}" alt="Album Cover" style="max-height: 150px;"><br>
+    {% endif %}
+
+    <button type="submit">Save</button>
+</form>
+
+<!-- Delete Button -->
+<form action="/delete/{{ album['id'] }}" method="POST" style="margin-top: 20px;">
+    <button type="submit" onclick="return confirm('Are you sure you want to delete this album?')">Delete Album</button>
+</form>
+
+<form method="POST" enctype="multipart/form-data">
+    <!-- Button to trigger cover fetch -->
+    <button type="button" id="fetch-thumbnail-button">Fetch Album Cover</button><br>
+</form>
+
+<script>
+    document.getElementById('fetch-thumbnail-button').addEventListener('click', function () {
+        fetch('/fetch_thumbnail', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                album_id: "{{ album['id'] }}", // Include album ID
+                artist: document.querySelector('select[name="artist"]').value,
+                title: document.querySelector('input[name="title"]').value
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Thumbnail fetched successfully!');
+                location.reload(); // Reload to show the updated thumbnail
+            } else {
+                alert('Failed to fetch thumbnail: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred while fetching the thumbnail.');
+        });
+    });
+</script>
+
+
+<a href="/">Back to list</a>
