@@ -4,6 +4,14 @@
 {% block content %}
 <h2 style="margin-top:0;">Studio Gear</h2>
 
+  <div style="margin:10px 0; padding:10px 12px; border:1px solid #e6e6e6; border-radius:10px; display:flex; gap:16px; flex-wrap:wrap;">
+    <div><strong>Items:</strong> {{ totals["item_count"] }}</div>
+    <div><strong>Total Qty:</strong> {{ totals["total_qty"] }}</div>
+    <div><strong>Total HP:</strong> {{ totals["total_hp"] }}</div>
+    <div><strong>Total Value:</strong> ${{ "%.2f"|format(totals["total_value"]) }}</div>
+    <div style="color:#666;"><strong>Total Paid:</strong> ${{ "%.2f"|format(totals["total_purchase"]) }}</div>
+  </div>
+
 <form method="get" action="{{ url_for('gear_page') }}"
       style="display:flex; gap:10px; flex-wrap:wrap; align-items:end; border:1px solid #e6e6e6; padding:12px; border-radius:10px;">
 

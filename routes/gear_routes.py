@@ -71,8 +71,20 @@ def register_gear_routes(app):
             sql += " AND purchase_source = ?"
             params.append(src)
 
+        # Existing:
         sql += " ORDER BY lower(brand), lower(name_model)"
         items = db.execute(sql, params).fetchall()
+
+        totals_sql = f"""
+            SELECT
+                COUNT(*) AS item_count,
+                COALESCE(SUM(COALESCE(quantity, 1)), 0) AS total_qty,
+                COALESCE(SUM(COALESCE(hp, 0) * COALESCE(quantity, 1)), 0) AS total_hp,
+                COALESCE(SUM(COALESCE(value, 0) * COALESCE(quantity, 1)), 0.0) AS total_value,
+                COALESCE(SUM(COALESCE(purchase_price, 0) * COALESCE(quantity, 1)), 0.0) AS total_purchase
+            FROM ({sql}) AS filtered
+        """
+        totals = db.execute(totals_sql, params).fetchone()
 
         sources = [
             r["purchase_source"]
@@ -89,6 +101,7 @@ def register_gear_routes(app):
         return render_template(
             "gear.html",
             items=items,
+            totals=totals,   # <-- NEW
             q=q,
             fmt=fmt,
             rig=rig,
@@ -97,6 +110,7 @@ def register_gear_routes(app):
             rigs=RIGS,
             sources=sources,
         )
+
 
     @app.get("/gear/new")
     def gear_new():
