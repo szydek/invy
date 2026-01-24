@@ -1,3 +1,126 @@
 {% extends "base.html" %}
-{% block title %}Studio gear{% endblock %}
-{% block content %}<h1>Studio gear</h1><p>Coming soon.</p>{% endblock %}
+{% block title %}Studio Gear · Invy{% endblock %}
+
+{% block content %}
+<h2 style="margin-top:0;">Studio Gear</h2>
+
+<form method="get" action="{{ url_for('gear_page') }}"
+      style="display:flex; gap:10px; flex-wrap:wrap; align-items:end; border:1px solid #e6e6e6; padding:12px; border-radius:10px;">
+
+  <div style="min-width:240px; flex:1;">
+    <label style="font-size:12px; color:#555; display:block; margin-bottom:4px;">Search</label>
+    <input name="q" value="{{ q }}" placeholder="Name, brand, functions, notes…"
+           style="width:100%; padding:8px 10px; border:1px solid #e6e6e6; border-radius:8px;">
+  </div>
+
+  <div style="min-width:160px;">
+    <label style="font-size:12px; color:#555; display:block; margin-bottom:4px;">Format</label>
+    <select name="format" style="width:100%; padding:8px 10px; border:1px solid #e6e6e6; border-radius:8px;">
+      <option value="">(Any)</option>
+      {% for f in formats %}
+        <option value="{{ f }}" {% if fmt == f %}selected{% endif %}>{{ f }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div style="min-width:160px;">
+    <label style="font-size:12px; color:#555; display:block; margin-bottom:4px;">Rig</label>
+    <select name="rig" style="width:100%; padding:8px 10px; border:1px solid #e6e6e6; border-radius:8px;">
+      <option value="">(Any)</option>
+      {% for r in rigs %}
+        <option value="{{ r }}" {% if rig == r %}selected{% endif %}>{{ r }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div style="min-width:180px;">
+    <label style="font-size:12px; color:#555; display:block; margin-bottom:4px;">Purchase Source</label>
+    <select name="purchase_source" style="width:100%; padding:8px 10px; border:1px solid #e6e6e6; border-radius:8px;">
+      <option value="">(Any)</option>
+      {% for s in sources %}
+        <option value="{{ s }}" {% if src == s %}selected{% endif %}>{{ s }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div>
+    <button type="submit"
+            style="padding:8px 10px; border:1px solid #e6e6e6; border-radius:8px; background:#fff;">
+      Filter
+    </button>
+    <a href="{{ url_for('gear_page') }}"
+       style="margin-left:6px; text-decoration:none; padding:8px 10px; border:1px solid #e6e6e6; border-radius:8px; display:inline-block;">
+      Clear
+    </a>
+  </div>
+
+  <div style="margin-left:auto;">
+    <a href="{{ url_for('gear_new') }}"
+       style="text-decoration:none; padding:8px 10px; border:1px solid #999; border-radius:8px; display:inline-block;">
+      + Add
+    </a>
+  </div>
+</form>
+
+<table style="width:100%; border-collapse:collapse; margin-top:14px;">
+  <thead>
+    <tr>
+      <th style="text-align:left; border-bottom:1px solid #e6e6e6; padding:10px 8px;">Name / Model</th>
+      <th style="text-align:left; border-bottom:1px solid #e6e6e6; padding:10px 8px;">Brand</th>
+      <th style="text-align:left; border-bottom:1px solid #e6e6e6; padding:10px 8px;">Format</th>
+      <th style="text-align:left; border-bottom:1px solid #e6e6e6; padding:10px 8px;">HP</th>
+      <th style="text-align:left; border-bottom:1px solid #e6e6e6; padding:10px 8px;">Rig</th>
+      <th style="text-align:left; border-bottom:1px solid #e6e6e6; padding:10px 8px;">Functions</th>
+      <th style="text-align:left; border-bottom:1px solid #e6e6e6; padding:10px 8px;">Purchase</th>
+      <th style="text-align:left; border-bottom:1px solid #e6e6e6; padding:10px 8px;">Qty</th>
+      <th style="text-align:left; border-bottom:1px solid #e6e6e6; padding:10px 8px;">Value</th>
+      <th style="text-align:left; border-bottom:1px solid #e6e6e6; padding:10px 8px;">Actions</th>
+    </tr>
+  </thead>
+
+  <tbody>
+    {% for it in items %}
+    <tr>
+      <td style="border-bottom:1px solid #f1f1f1; padding:10px 8px;">
+        <div style="font-weight:600;">{{ it["name_model"] }}</div>
+        {% if it["notes"] %}
+          <div style="color:#666; font-size:12px; margin-top:4px;">{{ it["notes"] }}</div>
+        {% endif %}
+      </td>
+      <td style="border-bottom:1px solid #f1f1f1; padding:10px 8px;">{{ it["brand"] or "" }}</td>
+      <td style="border-bottom:1px solid #f1f1f1; padding:10px 8px;">{{ it["format"] or "" }}</td>
+      <td style="border-bottom:1px solid #f1f1f1; padding:10px 8px;">{{ it["hp"] if it["hp"] is not none else "" }}</td>
+      <td style="border-bottom:1px solid #f1f1f1; padding:10px 8px;">{{ it["rig"] or "" }}</td>
+      <td style="border-bottom:1px solid #f1f1f1; padding:10px 8px; color:#666; font-size:12px;">{{ it["functions"] or "" }}</td>
+      <td style="border-bottom:1px solid #f1f1f1; padding:10px 8px; color:#666; font-size:12px;">
+        {{ it["purchase_source"] or "" }}
+        {% if it["seller_listing"] %}
+          <div style="color:#666; font-size:12px;">{{ it["seller_listing"] }}</div>
+        {% endif %}
+      </td>
+      <td style="border-bottom:1px solid #f1f1f1; padding:10px 8px;">{{ it["quantity"] }}</td>
+      <td style="border-bottom:1px solid #f1f1f1; padding:10px 8px;">
+        {% if it["value"] is not none %}
+          ${{ "%.2f"|format(it["value"]) }}
+        {% endif %}
+      </td>
+      <td style="border-bottom:1px solid #f1f1f1; padding:10px 8px;">
+        <a href="{{ url_for('gear_edit', gear_id=it['id']) }}">Edit</a>
+        <form method="post" action="{{ url_for('gear_delete', gear_id=it['id']) }}"
+              style="display:inline;" onsubmit="return confirm('Delete this item?');">
+          <button type="submit" style="margin-left:8px; border:none; background:none; color:#b00; cursor:pointer;">Delete</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+
+    {% if not items %}
+    <tr>
+      <td colspan="10" style="padding:14px 8px; color:#666;">
+        No gear yet. Click “+ Add”.
+      </td>
+    </tr>
+    {% endif %}
+  </tbody>
+</table>
+{% endblock %}

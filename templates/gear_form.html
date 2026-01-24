@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}{{ "Add Gear" if mode=="new" else "Edit Gear" }} · Invy{% endblock %}
+
+{% block content %}
+<h2 style="margin-top:0;">{{ "Add Gear" if mode=="new" else "Edit Gear" }}</h2>
+
+<form method="post"
+  action="{% if mode=='new' %}{{ url_for('gear_create') }}{% else %}{{ url_for('gear_update', gear_id=item['id']) }}{% endif %}"
+  style="display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap:12px; max-width:1100px;">
+
+  <div style="grid-column: span 2;">
+    <label style="font-size:12px; color:#555; display:block; margin-bottom:4px;">Name / Model *</label>
+    <input name="name_model" required value="{{ item['name_model'] or '' }}"
+           style="width:100%; padding:8px 10px; border:1px solid #e6e6e6; border-radius:8px;">
+  </div>
+
+  <div>
+    <label style="font-size:12px; color:#555; display:block; margin-bottom:4px;">Brand</label>
+    <input name="brand" value="{{ item['brand'] or '' }}"
+           style="width:100%; padding:8px 10px; border:1px solid #e6e6e6; border-radius:8px;">
+  </div>
+
+  <div>
+    <label style="font-size:12px; color:#555; display:block; margin-bottom:4px;">Format</label>
+    <select name="format" style="width:100%; padding:8px 10px; border:1px solid #e6e6e6; border-radius:8px;">
+      <option value="">(None)</option>
+      {% for f in formats %}
+        <option value="{{ f }}" {% if item['format'] == f %}selected{% endif %}>{{ f }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div>
+    <label style="font-size:12px; color:#555; display:block; margin-bottom:4px;">HP</label>
+    <input name="hp" inputmode="numeric" value="{{ item['hp'] if item['hp'] is not none else '' }}"
+           style="width:100%; padding:8px 10px; border:1px solid #e6e6e6; border-radius:8px;">
+  </div>
+
+  <div>
+    <label style="font-size:12px; color:#555; display:block; margin-bottom:4px;">Quantity</label>
+    <input name="quantity" inputmode="numeric" value="{{ item['quantity'] or 1 }}"
+           style="width:100%; padding:8px 10px; border:1px solid #e6e6e6; border-radius:8px;">
+  </div>
+
+  <div>
+    <label style="font-size:12px; color:#555; display:block; margin-bottom:4px;">Rig</label>
+    <select name="rig" style="width:100%; padding:8px 10px; border:1px solid #e6e6e6; border-radius:8px;">
+      <option value="">(None)</option>
+      {% for r in rigs %}
+        <option value="{{ r }}" {% if item['rig'] == r %}selected{% endif %}>{{ r }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div style="grid-column: span 1;">
+    <label style="font-size:12px; color:#555; display:block; margin-bottom:4px;">Purchase Source</label>
+    <input name="purchase_source" value="{{ item['purchase_source'] or '' }}"
+           placeholder="Reverb / Perfect Circuit / etc."
+           style="width:100%; padding:8px 10px; border:1px solid #e6e6e6; border-radius:8px;">
+  </div>
+
+  <div style="grid-column: span 2;">
+    <label style="font-size:12px; color:#555; display:block; margin-bottom:4px;">Seller / Listing</label>
+    <input name="seller_listing" value="{{ item['seller_listing'] or '' }}"
+           placeholder="Reverb – synthcube / Gift – ____ / etc."
+           style="width:100%; padding:8px 10px; border:1px solid #e6e6e6; border-radius:8px;">
+  </div>
+
+  <div style="grid-column: span 3;">
+    <label style="font-size:12px; color:#555; display:block; margin-bottom:4px;">Functions</label>
+    <input name="functions" value="{{ item['functions'] or '' }}"
+           placeholder="Oscillator, VCA, Mixer, Effect, Utility…"
+           style="width:100%; padding:8px 10px; border:1px solid #e6e6e6; border-radius:8px;">
+  </div>
+
+  <div>
+    <label style="font-size:12px; color:#555; display:block; margin-bottom:4px;">Value</label>
+    <input name="value" value="{{ item['value'] if item['value'] is not none else '' }}"
+           style="width:100%; padding:8px 10px; border:1px solid #e6e6e6; border-radius:8px;">
+  </div>
+
+  <div>
+    <label style="font-size:12px; color:#555; display:block; margin-bottom:4px;">Purchase Price</label>
+    <input name="purchase_price" value="{{ item['purchase_price'] if item['purchase_price'] is not none else '' }}"
+           style="width:100%; padding:8px 10px; border:1px solid #e6e6e6; border-radius:8px;">
+  </div>
+
+  <div>
+    <label style="font-size:12px; color:#555; display:block; margin-bottom:4px;">Year Built</label>
+    <input name="year_built" inputmode="numeric" value="{{ item['year_built'] if item['year_built'] is not none else '' }}"
+           style="width:100%; padding:8px 10px; border:1px solid #e6e6e6; border-radius:8px;">
+  </div>
+
+  <div style="grid-column: span 3;">
+    <label style="font-size:12px; color:#555; display:block; margin-bottom:4px;">Notes</label>
+    <textarea name="notes"
+              style="width:100%; padding:8px 10px; border:1px solid #e6e6e6; border-radius:8px; min-height:110px;">{{ item['notes'] or '' }}</textarea>
+  </div>
+
+  <div style="grid-column: span 3; display:flex; gap:10px; align-items:center;">
+    <button type="submit"
+            style="padding:8px 10px; border:1px solid #999; border-radius:8px; background:#fff;">
+      Save
+    </button>
+    <a href="{{ url_for('gear_page') }}"
+       style="text-decoration:none; padding:8px 10px; border:1px solid #e6e6e6; border-radius:8px;">
+      Cancel
+    </a>
+  </div>
+</form>
+{% endblock %}
