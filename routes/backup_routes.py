@@ -3,9 +3,10 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
-import shutil
+# import shutil
+import sqlite3
 
-from flask import redirect, url_for, flash
+from flask import redirect, url_for, flash, request
 
 from config import DATABASE
 
@@ -26,7 +27,14 @@ def register_backup_routes(app):
         dst = backups_dir / f"invy-{stamp}.db"
 
         # Copy the database file as a snapshot
-        shutil.copy2(src, dst)
+        # shutil.copy2(src, dst)
+        src_conn = sqlite3.connect(str(src))
+        dst_conn = sqlite3.connect(str(dst))
+        with dst_conn:
+            src_conn.backup(dst_conn)
+        dst_conn.close()
+        src_conn.close()
 
         flash(f"DB backup created: {dst}", "success")
-        return redirect(url_for("routes"))
+        return redirect(request.referrer or url_for("gear_page"))
+
