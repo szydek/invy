@@ -1,0 +1,196 @@
+# routes/albums_routes.py
+from __future__ import annotations
+
+import os
+import json
+from typing import Any, Optional
+
+from flask import render_template, request, redirect, url_for
+
+from db import get_db
+from util import safe_filename
+from config import THUMBNAIL_FOLDER
+import routes.discogs_routes as discogs
+
+
+
+def get_existing_artists_and_genres():
+    db = get_db()
+    artists = [r["artist"] for r in db.execute("SELECT DISTINCT artist FROM albums ORDER BY artist").fetchall()]
+    genres = [r["genre"] for r in db.execute("SELECT DISTINCT genre FROM albums ORDER BY genre").fetchall()]
+    return artists, genres
+
+
+def register_albums_routes(app):
+    @app.route("/albums")
+    def albums_page():
+        db = get_db()
+        rows = db.execute("SELECT * FROM albums ORDER BY artist, title").fetchall()
+
+        albums: dict[str, list[dict[str, Any]]] = {}
+        genres = set()
+
+        for row in rows:
+            artist = row["artist"]
+            genre = (row["genre"] or "").strip()
+            if genre:
+                genres.add(genre)
+
+            formats = []
+            if row["formats"] and isinstance(row["formats"], str):
+                try:
+                    formats = json.loads(row["formats"])
+                except Exception:
+                    formats = []
+
+            album = {
+                "id": row["id"],
+                "title": row["title"],
+                "release_date": row["release_date"],
+                "genre": row["genre"],
+                "stream_link": row["stream_link"],
+                "notes": row["notes"],
+                "mp3_file": row["mp3_file"],
+                "formats": formats,
+                "cover_image": row["cover_image"],
+            }
+            albums.setdefault(artist, []).append(album)
+
+        unique_genres = sorted(genres, key=lambda s: s.lower())
+        return render_template("albums.html", albums=albums, unique_genres=unique_genres)
+
+    @app.route("/add", methods=["GET", "POST"])
+    def add_album():
+        if request.method == "POST":
+            artist = request.form["artist"]
+            title = request.form["title"]
+            release_date = request.form.get("release_date", "")
+            genre = request.form.get("genre", "")
+            stream_link = request.form.get("stream_link", "")
+            notes = request.form.get("notes", "")
+            cover_url = request.form.get("cover_url", "")
+
+            mp3_file = request.files.get("mp3_file")
+            mp3_filename = None
+            if mp3_file and mp3_file.filename and mp3_file.filename.lower().endswith(".mp3"):
+                mp3_filename = f"{artist}-{title}.mp3".replace(" ", "_")
+                mp3_path = os.path.join(app.config["UPLOAD_FOLDER"], mp3_filename)
+                mp3_file.save(mp3_path)
+
+            selected_formats = request.form.getlist("formats")
+            formats_json = json.dumps(selected_formats) if selected_formats else json.dumps([])
+
+            db = get_db()
+            db.execute(
+                """
+                INSERT INTO albums (artist, title, release_date, genre, formats, stream_link, mp3_file, notes)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (artist, title, release_date, genre, formats_json, stream_link, mp3_filename, notes),
+            )
+            db.commit()
+
+            if cover_url:
+                download_thumbnail(artist, title, cover_url)
+
+            return redirect(url_for("albums_page"))
+
+        artists, genres = get_existing_artists_and_genres()
+        return render_template("add.html", artists=artists, genres=genres)
+
+    @app.route("/edit/<int:album_id>", methods=["GET", "POST"])
+    def edit_album(album_id: int):
+        db = get_db()
+
+        if request.method == "POST":
+            artist = request.form["artist"]
+            title = request.form["title"]
+            release_date = request.form.get("release_date", "")
+            genre = request.form.get("genre", "")
+            stream_link = request.form.get("stream_link", "")
+            notes = request.form.get("notes", "")
+
+            # Cover image handling
+            if request.form.get("fetch_cover") == "on":
+                cover_image_path = fetch_thumbnail_from_discogs(artist, title)
+            else:
+                row = db.execute("SELECT cover_image FROM albums WHERE id = ?", (album_id,)).fetchone()
+                cover_image_path = row["cover_image"] if row else None
+
+            # MP3 handling
+            mp3_file = request.files.get("mp3_file")
+            if mp3_file and mp3_file.filename and mp3_file.filename.lower().endswith(".mp3"):
+                mp3_filename = f"{artist}-{title}.mp3".replace(" ", "_")
+                mp3_path = os.path.join(app.config["UPLOAD_FOLDER"], mp3_filename)
+                mp3_file.save(mp3_path)
+            else:
+                row = db.execute("SELECT mp3_file FROM albums WHERE id = ?", (album_id,)).fetchone()
+                mp3_filename = row["mp3_file"] if row else None
+
+            # Formats handling
+            selected_formats = request.form.getlist("formats")
+            if selected_formats:
+                formats_json = json.dumps(selected_formats)
+            else:
+                row = db.execute("SELECT formats FROM albums WHERE id = ?", (album_id,)).fetchone()
+                formats_json = row["formats"] if row else json.dumps([])
+
+            db.execute(
+                """
+                UPDATE albums
+                SET artist = ?, title = ?, release_date = ?, genre = ?, stream_link = ?, notes = ?,
+                    mp3_file = ?, formats = ?, cover_image = ?
+                WHERE id = ?
+                """,
+                (artist, title, release_date, genre, stream_link, notes, mp3_filename, formats_json, cover_image_path, album_id),
+            )
+            db.commit()
+            return redirect(url_for("albums_page"))
+
+        row = db.execute("SELECT * FROM albums WHERE id = ?", (album_id,)).fetchone()
+        if not row:
+            return "Album not found", 404
+
+        formats = []
+        if row["formats"] and isinstance(row["formats"], str):
+            try:
+                formats = json.loads(row["formats"])
+            except Exception:
+                formats = []
+
+        artists, genres = get_existing_artists_and_genres()
+
+        album_data = {
+            "id": row["id"],
+            "artist": row["artist"],
+            "title": row["title"],
+            "release_date": row["release_date"],
+            "genre": row["genre"],
+            "stream_link": row["stream_link"],
+            "notes": row["notes"],
+            "mp3_file": row["mp3_file"],
+            "formats": formats,
+            "cover_image": row["cover_image"],
+        }
+
+        return render_template("edit.html", album=album_data, artists=artists, genres=genres)
+
+    @app.route("/delete/<int:album_id>", methods=["POST"])
+    def delete_album(album_id: int):
+        db = get_db()
+        row = db.execute("SELECT mp3_file FROM albums WHERE id = ?", (album_id,)).fetchone()
+
+        mp3_filename = row["mp3_file"] if row else None
+        mp3_path = os.path.join(app.config["UPLOAD_FOLDER"], mp3_filename) if mp3_filename else None
+
+        db.execute("DELETE FROM albums WHERE id = ?", (album_id,))
+        db.commit()
+
+        # delete file if exists
+        if mp3_path and os.path.exists(mp3_path):
+            try:
+                os.remove(mp3_path)
+            except Exception:
+                pass
+
+        return redirect(url_for("albums_page"))

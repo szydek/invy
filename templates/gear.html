@@ -48,18 +48,23 @@
             style="padding:8px 10px; border:1px solid #e6e6e6; border-radius:8px; background:#fff;">
       Filter
     </button>
-    <a href="{{ url_for('gear_page') }}"
+    <!-- <a href="{{ url_for('gear_page') }}"
        style="margin-left:6px; text-decoration:none; padding:8px 10px; border:1px solid #e6e6e6; border-radius:8px; display:inline-block;">
       Clear
-    </a>
+    </a> -->
+
   </div>
 
-  <div style="margin-left:auto;">
+  <div style="margin-left:auto; display:flex; gap:10px; align-items:center;">
     <a href="{{ url_for('gear_new') }}"
-       style="text-decoration:none; padding:8px 10px; border:1px solid #999; border-radius:8px; display:inline-block;">
+      style="text-decoration:none; padding:8px 10px; border:1px solid #999; border-radius:8px; display:inline-block;">
       + Add
     </a>
+
+    <a href="{{ url_for('gear_export_csv', q=q, format=fmt, rig=rig, purchase_source=src) }}">Export CSV</a>
+    <a href="{{ url_for('gear_export_json', q=q, format=fmt, rig=rig, purchase_source=src) }}">Export JSON</a>
   </div>
+
 </form>
 
 <table style="width:100%; border-collapse:collapse; margin-top:14px;">
