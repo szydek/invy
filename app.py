@@ -17,6 +17,8 @@ from routes.albums_routes import register_albums_routes
 from routes.gear_routes import register_gear_routes
 from routes.discogs_routes import register_discogs_routes
 from routes.backup_routes import register_backup_routes
+from routes.wiki_routes import register_wiki_routes
+
 
 
 
@@ -43,6 +45,8 @@ def create_app() -> Flask:
     register_gear_routes(app)
     register_discogs_routes(app)
     register_backup_routes(app)
+    register_wiki_routes(app)
+
 
 
     return app
