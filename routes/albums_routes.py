@@ -3,9 +3,10 @@ from __future__ import annotations
 
 import os
 import json
-from typing import Any, Optional
+import re
+from typing import Any
 
-from flask import render_template, request, redirect, url_for
+from flask import render_template, request, redirect, url_for, current_app
 
 from db import get_db
 from util import safe_filename
@@ -13,11 +14,47 @@ from config import THUMBNAIL_FOLDER
 import routes.discogs_routes as discogs
 
 
+AUDIO_EXTS = {".mp3", ".m4a", ".wav", ".ogg"}
+
+
+def _norm(s: str) -> str:
+    s = (s or "").lower().strip()
+    s = s.replace("&", " and ")
+    s = re.sub(r"[^a-z0-9]+", "-", s)
+    s = re.sub(r"-{2,}", "-", s).strip("-")
+    return s
+
+
+def _list_audio_dir() -> list[str]:
+    folder = os.path.join(current_app.static_folder, "audio")
+    if not os.path.isdir(folder):
+        return []
+    files: list[str] = []
+    for name in os.listdir(folder):
+        if name.startswith("."):
+            continue
+        ext = os.path.splitext(name)[1].lower()
+        if ext in AUDIO_EXTS:
+            files.append(name)
+    return sorted(files)
+
+
+def _match_album_audio_files(all_files: list[str], artist: str, title: str) -> list[str]:
+    # filenames like: Artist-Album-TrackName.mp3
+    key = f"{_norm(artist)}-{_norm(title)}-"
+    return [f for f in all_files if _norm(f).startswith(key)]
+
 
 def get_existing_artists_and_genres():
     db = get_db()
-    artists = [r["artist"] for r in db.execute("SELECT DISTINCT artist FROM albums ORDER BY artist").fetchall()]
-    genres = [r["genre"] for r in db.execute("SELECT DISTINCT genre FROM albums ORDER BY genre").fetchall()]
+    artists = [
+        r["artist"]
+        for r in db.execute("SELECT DISTINCT artist FROM albums ORDER BY artist").fetchall()
+    ]
+    genres = [
+        r["genre"]
+        for r in db.execute("SELECT DISTINCT genre FROM albums ORDER BY genre").fetchall()
+    ]
     return artists, genres
 
 
@@ -30,6 +67,7 @@ def register_albums_routes(app):
         albums: dict[str, list[dict[str, Any]]] = {}
         genres = set()
 
+        # Build artist -> albums list (your template expects this)
         for row in rows:
             artist = row["artist"]
             genre = (row["genre"] or "").strip()
@@ -45,18 +83,31 @@ def register_albums_routes(app):
 
             album = {
                 "id": row["id"],
+                "artist": artist,  # IMPORTANT: include this so matching works
                 "title": row["title"],
                 "release_date": row["release_date"],
                 "genre": row["genre"],
                 "stream_link": row["stream_link"],
                 "notes": row["notes"],
-                "mp3_file": row["mp3_file"],
+                "mp3_file": row["mp3_file"],  # legacy single-file support (optional)
                 "formats": formats,
                 "cover_image": row["cover_image"],
             }
             albums.setdefault(artist, []).append(album)
 
         unique_genres = sorted(genres, key=lambda s: s.lower())
+
+        # Attach audio_files per album by matching filenames in /static/audio
+        all_audio_files = _list_audio_dir()
+        for artist_name, albums_by_artist in albums.items():
+            for a in albums_by_artist:
+                a["audio_files"] = _match_album_audio_files(
+                    all_audio_files,
+                    a.get("artist", artist_name),
+                    a.get("title", ""),
+                )
+            print(a["artist"], "-", a["title"], "=>", len(a["audio_files"]), a["audio_files"][:5])
+
         return render_template("albums.html", albums=albums, unique_genres=unique_genres)
 
     @app.route("/add", methods=["GET", "POST"])
@@ -91,7 +142,7 @@ def register_albums_routes(app):
             db.commit()
 
             if cover_url:
-                download_thumbnail(artist, title, cover_url)
+                discogs.download_thumbnail(artist, title, cover_url)
 
             return redirect(url_for("albums_page"))
 
@@ -194,3 +245,4 @@ def register_albums_routes(app):
                 pass
 
         return redirect(url_for("albums_page"))
+    

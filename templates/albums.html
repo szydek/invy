@@ -49,6 +49,35 @@
         padding: 10px;
         width: 300px;
     }
+    .tracklist {
+    list-style: none;
+    padding: 0;
+    margin-top: 6px;
+    font-size: 0.9em;
+}
+    .track {
+        cursor: pointer;
+        padding: 3px 0;
+    }
+
+    .track:hover {
+        text-decoration: underline;
+    }
+
+    .track.active {
+        font-weight: bold;
+    }
+
+    .track-controls {
+        margin-top: 6px;
+        display: flex;
+        gap: 6px;
+    }
+
+    .track-controls button {
+        cursor: pointer;
+        padding: 2px 8px;
+    }
 </style>
 {% endblock %}
 
@@ -58,7 +87,7 @@
 <!-- Filter Input -->
 <input type="text" id="filter-input" placeholder="Filter by artist or album" onkeyup="filterAlbums()">
 
-  <a href="{{ url_for('add_album') }}">add</a>
+<a href="{{ url_for('add_album') }}">add</a>
 
 <button onclick="expandAll()">Expand All</button>
 <button onclick="collapseAll()">Collapse All</button>
@@ -114,20 +143,38 @@
                             {% endif %}
                         </td>
                         <td>
-                            {% if album.mp3_file %}
-                            <audio controls>
-                                <source src="{{ url_for('static', filename='audio/' + album.mp3_file) }}" type="audio/mpeg">
-                                Your browser does not support the audio element.
+                        {% if album.audio_files and album.audio_files|length > 0 %}
+                        <div class="album-player" data-player-id="player-{{ album.id }}">
+                            <audio id="player-{{ album.id }}" controls preload="none"
+                                src="{{ url_for('static', filename='audio/' ~ album.audio_files[0]) }}">
                             </audio>
-                            {% else %}
-                                -
-                            {% endif %}
 
-                            {% if album.stream_link %}
-                            <a href="{{ album.stream_link }}" target="_blank" rel="noopener">Ref</a>
-                            {% else %}
-                                -
+                            <div class="track-controls">
+                            <button type="button" class="prev-track" data-player="player-{{ album.id }}">&#171;</button>
+                            <button type="button" class="next-track" data-player="player-{{ album.id }}">&#187;</button>
+                            </div>
+
+                            {% if album.audio_files|length > 1 %}
+                            <ul class="tracklist">
+                            {% for f in album.audio_files %}
+                            <li class="track"
+                                data-player="player-{{ album.id }}"
+                                data-file="{{ f }}">
+                                {{ loop.index }}.
+                                {{ f.split('-', 2)[-1].rsplit('.', 1)[0] }}
+                            </li>
+                            {% endfor %}
+                            </ul>
                             {% endif %}
+                        </div>
+                        {% else %}
+                        -
+                        {% endif %}
+                        {% if album.stream_link %}
+                            <a href="{{ album.stream_link }}" target="_blank" rel="noopener">Ref</a>
+                        {% else %}
+                            -
+                        {% endif %}
                         </td>
                         <td>{{ album.notes }}</td>
                         <td>
@@ -142,6 +189,93 @@
 {% endblock %}
 
 {% block scripts %}
+<script>
+  const baseAudioUrl = "{{ url_for('static', filename='audio/') }}";
+
+  function setActiveTrack(playerId, idx) {
+    const tracks = Array.from(document.querySelectorAll(`.track[data-player="${playerId}"]`));
+    if (!tracks.length) return null;
+
+    // clamp + wrap
+    idx = (idx + tracks.length) % tracks.length;
+
+    tracks.forEach(t => t.classList.remove("active"));
+    tracks[idx].classList.add("active");
+    return tracks[idx];
+  }
+
+  function playTrackEl(trackEl) {
+    if (!trackEl) return;
+    const playerId = trackEl.dataset.player;
+    const player = document.getElementById(playerId);
+    if (!player) return;
+
+    const file = trackEl.dataset.file;
+    player.src = baseAudioUrl + encodeURIComponent(file);
+    player.load();
+    player.play().catch(() => {});
+  }
+
+  function getActiveIndex(playerId) {
+    const tracks = Array.from(document.querySelectorAll(`.track[data-player="${playerId}"]`));
+    return tracks.findIndex(t => t.classList.contains("active"));
+  }
+
+  document.addEventListener("click", function (e) {
+    // Click a track
+    const track = e.target.closest(".track");
+    if (track) {
+      // activate it and play
+      const playerId = track.dataset.player;
+      const tracks = Array.from(document.querySelectorAll(`.track[data-player="${playerId}"]`));
+      const idx = tracks.indexOf(track);
+      playTrackEl(setActiveTrack(playerId, idx));
+      return;
+    }
+
+    // Prev / Next
+    const prevBtn = e.target.closest(".prev-track");
+    const nextBtn = e.target.closest(".next-track");
+
+    if (prevBtn || nextBtn) {
+      const playerId = (prevBtn || nextBtn).dataset.player;
+
+      // if nothing active yet, default to first track
+      let idx = getActiveIndex(playerId);
+      if (idx === -1) idx = 0;
+
+      idx = prevBtn ? (idx - 1) : (idx + 1);
+      playTrackEl(setActiveTrack(playerId, idx));
+      return;
+    }
+  });
+
+  // Auto advance to next track when one ends
+  document.addEventListener("ended", function (e) {
+    const player = e.target;
+    if (!player || !player.id) return;
+
+    const playerId = player.id;
+    const tracks = Array.from(document.querySelectorAll(`.track[data-player="${playerId}"]`));
+    if (!tracks.length) return;
+
+    let idx = getActiveIndex(playerId);
+    if (idx === -1) idx = 0;
+    idx = idx + 1;
+
+    playTrackEl(setActiveTrack(playerId, idx));
+  }, true);
+
+  // Optional: set the first track active on load (so prev/next works immediately)
+  document.addEventListener("DOMContentLoaded", function () {
+    document.querySelectorAll(".album-player").forEach(wrapper => {
+      const playerId = wrapper.dataset.playerId;
+      if (!playerId) return;
+      if (getActiveIndex(playerId) === -1) setActiveTrack(playerId, 0);
+    });
+  });
+</script>
+
 <script>
     let sortOrders = {}; // Keep track of sorting order for each column
 

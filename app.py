@@ -20,6 +20,24 @@ from routes.backup_routes import register_backup_routes
 from routes.wiki_routes import register_wiki_routes
 
 
+import time
+import feedparser
+
+_HEADLINES_CACHE = {"ts": 0.0, "items": []}
+
+def get_top_headlines() -> list[dict]:
+    # Use a reliable feed (BBC is usually solid)
+    rss_url = "https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en"
+    feed = feedparser.parse(rss_url)
+
+    items: list[dict] = []
+    for e in feed.entries[:15]:
+        items.append({
+            "title": (e.get("title") or "").strip(),
+            "link": e.get("link"),
+            "published": e.get("published") or e.get("updated") or "",
+        })
+    return items
 
 
 def create_app() -> Flask:
@@ -38,6 +56,20 @@ def create_app() -> Flask:
     @app.before_request
     def _ensure_db() -> None:
         init_db()
+    
+    @app.context_processor
+    def inject_headlines():
+        now = time.time()
+        if now - _HEADLINES_CACHE["ts"] > 600:  # 10 min cache
+            try:
+                _HEADLINES_CACHE["items"] = get_top_headlines()
+                _HEADLINES_CACHE["ts"] = now
+            except Exception as e:
+                print("HEADLINES ERROR:", e)
+                _HEADLINES_CACHE["items"] = []
+        return {"headlines": _HEADLINES_CACHE["items"]}
+
+
 
     # Register route groups (no blueprints; endpoints preserved)
     register_core_routes(app)
