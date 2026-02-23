@@ -78,6 +78,13 @@
         cursor: pointer;
         padding: 2px 8px;
     }
+
+    .track.play-track {
+        cursor: pointer;
+    }
+    .track.play-track:hover {
+        text-decoration: underline;
+    }
 </style>
 {% endblock %}
 
@@ -143,38 +150,56 @@
                             {% endif %}
                         </td>
                         <td>
-                        {% if album.audio_files and album.audio_files|length > 0 %}
-                        <div class="album-player" data-player-id="player-{{ album.id }}">
-                            <audio id="player-{{ album.id }}" controls preload="none"
-                                src="{{ url_for('static', filename='audio/' ~ album.audio_files[0]) }}">
-                            </audio>
+                            {% if album.audio_files and album.audio_files|length > 0 %}
 
-                            <div class="track-controls">
-                            <button type="button" class="prev-track" data-player="player-{{ album.id }}">&#171;</button>
-                            <button type="button" class="next-track" data-player="player-{{ album.id }}">&#187;</button>
-                            </div>
+                                {# Build a JSON array of track objects for the global player #}
+                                <script type="application/json" id="tracks-json-{{ album.id }}">
+                                [
+                                    {% for f in album.audio_files %}
+                                    {
+                                        "track_id": "{{ album.id }}-{{ loop.index0 }}",
+                                        "album_id": {{ album.id }},
+                                        "album_title": {{ (album.title or 'Unknown Album')|tojson }},
+                                        "artist": {{ (album.artist or '')|tojson }},
+                                        "title": {{ (f.split('-', 2)[-1].rsplit('.', 1)[0])|tojson }},
+                                        "url": {{ url_for('static', filename='audio/' ~ f)|tojson }}
+                                    }{% if not loop.last %},{% endif %}
+                                    {% endfor %}
+                                ]
+                                </script>
 
-                            {% if album.audio_files|length > 1 %}
-                            <ul class="tracklist">
-                            {% for f in album.audio_files %}
-                            <li class="track"
-                                data-player="player-{{ album.id }}"
-                                data-file="{{ f }}">
-                                {{ loop.index }}.
-                                {{ f.split('-', 2)[-1].rsplit('.', 1)[0] }}
-                            </li>
-                            {% endfor %}
-                            </ul>
+                                <div class="album-queue" data-album-id="{{ album.id }}">
+                                <button type="button"
+                                        class="play-album"
+                                        data-album-id="{{ album.id }}">
+                                    ▶ Play
+                                </button>
+
+                                {% if album.audio_files|length > 1 %}
+                                    <ul class="tracklist">
+                                    {% for f in album.audio_files %}
+                                        <li class="track play-track"
+                                            role="button"
+                                            tabindex="0"
+                                            data-album-id="{{ album.id }}"
+                                            data-index="{{ loop.index0 }}">
+                                        {{ loop.index }}.
+                                        {{ f.split('-', 2)[-1].rsplit('.', 1)[0] }}
+                                        </li>
+                                    {% endfor %}
+                                    </ul>
+                                {% endif %}
+                                </div>
+
+                            {% else %}
+                                -
                             {% endif %}
-                        </div>
-                        {% else %}
-                        -
-                        {% endif %}
-                        {% if album.stream_link %}
-                            <a href="{{ album.stream_link }}" target="_blank" rel="noopener">Ref</a>
-                        {% else %}
-                            -
-                        {% endif %}
+
+                            {% if album.stream_link %}
+                                <a href="{{ album.stream_link }}" target="_blank" rel="noopener">Ref</a>
+                            {% else %}
+                                -
+                            {% endif %}
                         </td>
                         <td>{{ album.notes }}</td>
                         <td>
@@ -189,6 +214,49 @@
 {% endblock %}
 
 {% block scripts %}
+<script>
+  function getAlbumTracks(albumId) {
+    const el = document.getElementById(`tracks-json-${albumId}`);
+    if (!el) return [];
+    try { return JSON.parse(el.textContent); } catch (e) { return []; }
+  }
+
+  function playAlbum(albumId, startIndex) {
+    const tracks = getAlbumTracks(albumId);
+    if (!tracks.length) return;
+    if (!window.InvyPlayer) return;
+    window.InvyPlayer.setQueue(tracks, startIndex || 0, true);
+  }
+
+  // Click handlers
+  document.addEventListener("click", (e) => {
+    const playAlbumBtn = e.target.closest(".play-album");
+    if (playAlbumBtn) {
+      const albumId = playAlbumBtn.dataset.albumId;
+      playAlbum(albumId, 0);
+      return;
+    }
+
+    const playTrackLi = e.target.closest(".play-track");
+    if (playTrackLi) {
+      const albumId = playTrackLi.dataset.albumId;
+      const idx = parseInt(playTrackLi.dataset.index, 10) || 0;
+      playAlbum(albumId, idx);
+      return;
+    }
+  });
+
+  // Optional: Enter key activates track when focused
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    const playTrackLi = e.target.closest(".play-track");
+    if (playTrackLi) {
+      const albumId = playTrackLi.dataset.albumId;
+      const idx = parseInt(playTrackLi.dataset.index, 10) || 0;
+      playAlbum(albumId, idx);
+    }
+  });
+</script>
 <script>
   const baseAudioUrl = "{{ url_for('static', filename='audio/') }}";
 

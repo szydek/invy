@@ -5,11 +5,25 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{% block title %}Invy{% endblock %}</title>
 
+  <!-- Global player CSS loads in head -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/global_player.css') }}">
+
   <style>
     body {
       margin: 0;
       font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      /* If you don't put this in global_player.css, keep it here */
+      /* padding-bottom: 90px; */
     }
+
+    /* Sticky wrapper for header + ticker (so they stick together cleanly) */
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 2000;
+      background: #fff;
+    }
+
     header {
       border-bottom: 1px solid #e6e6e6;
       padding: 12px 16px;
@@ -17,17 +31,21 @@
       gap: 16px;
       align-items: center;
       flex-wrap: wrap;
+      background: #fff;
     }
+
     .brand a {
       text-decoration: none;
       color: inherit;
       font-weight: 700;
     }
+
     nav {
       display: flex;
       gap: 8px;
       flex-wrap: wrap;
     }
+
     nav a {
       text-decoration: none;
       color: inherit;
@@ -35,13 +53,16 @@
       border: 1px solid #e6e6e6;
       border-radius: 8px;
     }
+
     nav a.active {
       border-color: #999;
       font-weight: 600;
     }
+
     main {
       padding: 16px;
     }
+
     .news-ticker {
       border-bottom: 1px solid #e6e6e6;
       padding: 8px 16px;
@@ -65,82 +86,73 @@
       animation-play-state: paused;
     }
 
-    .news-ticker a {
-      color: #333;
-    }
-
-    .news-ticker a:hover {
-      color: #000;
-    }
+    .news-ticker a { color: #333; }
+    .news-ticker a:hover { color: #000; }
 
     .news-ticker small {
       opacity: 0.6;
       font-size: 12px;
     }
 
-
     @keyframes ticker-scroll {
-      0% {
-        transform: translateX(0%);
-      }
-      100% {
-        transform: translateX(-100%);
-      }
+      0% { transform: translateX(0%); }
+      100% { transform: translateX(-100%); }
     }
-
   </style>
 
   {% block head %}{% endblock %}
 </head>
 
 <body>
-  <header>
-    <div class="brand">
-      <a href="{{ url_for('albums_page') }}">Invy</a>
-    </div>
+  <div class="topbar">
+    <header>
+      <div class="brand">
+        <a href="{{ url_for('albums_page') }}">Invy</a>
+      </div>
 
-    <nav>
-      <a href="{{ url_for('albums_page') }}"
-         class="{% if request.path.startswith('/albums') %}active{% endif %}">
-         Albums
-      </a>
+      <nav>
+        <a href="{{ url_for('albums_page') }}"
+           class="{% if request.path.startswith('/albums') %}active{% endif %}">
+          Albums
+        </a>
 
-      <a href="{{ url_for('wiki_page') }}"
-         class="{% if request.path.startswith('/wiki') %}active{% endif %}">
-         Wiki
-      </a>
+        <a href="{{ url_for('wiki_page') }}"
+           class="{% if request.path.startswith('/wiki') %}active{% endif %}">
+          Wiki
+        </a>
 
-      {% set ep = request.endpoint or '' %}
-      <a href="{{ url_for('gear_page') }}"
-         class="{% if request.endpoint == 'gear_page' %}active{% endif %}">
-         Studio Gear
-      </a>
+        <a href="{{ url_for('gear_page') }}"
+           class="{% if request.endpoint == 'gear_page' %}active{% endif %}">
+          Studio Gear
+        </a>
 
-      
-      <a href="{{ url_for('household_page') }}"
-         class="{% if request.path.startswith('/household') %}active{% endif %}">
-         Household
-      </a>
+        <a href="{{ url_for('household_page') }}"
+           class="{% if request.path.startswith('/household') %}active{% endif %}">
+          Household
+        </a>
 
-      <a href="{{ url_for('local_page') }}"
-         class="{% if request.path.startswith('/local') %}active{% endif %}">
-         Local
-      </a>
-    </nav>
-  </header>
+        <a href="{{ url_for('local_page') }}"
+           class="{% if request.path.startswith('/local') %}active{% endif %}">
+          Local
+        </a>
+      </nav>
+    </header>
 
-  <div class="news-ticker">
-    <div class="ticker-track">
-      {% for item in headlines %}
-        <span class="ticker-item">
-          <a href="{{ item.link }}" target="_blank" rel="noopener">
-            {{ item.title }}
-          </a>
-          {% if item.published %} <small>({{ item.published }})</small>{% endif %}
-          &nbsp;&nbsp;|&nbsp;&nbsp;
-        </span>
-      {% endfor %}
-    </div>
+    {% if headlines|default([]) %}
+      <div class="news-ticker">
+        <div class="ticker-track">
+          {% for item in headlines|default([]) %}
+            <span class="ticker-item">
+              <a href="{{ item.link }}" target="_blank" rel="noopener">
+                {{ item.title }}
+              </a>
+              {% if item.published %} <small>({{ item.published }})</small>{% endif %}
+              &nbsp;&nbsp;|&nbsp;&nbsp;
+            </span>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
   </div>
 
   <main>
@@ -159,6 +171,35 @@
     {% block content %}{% endblock %}
   </main>
 
+  <div id="global-player" class="global-player">
+    <div class="gp-left">
+      <div class="gp-title" id="gp-title">Nothing queued</div>
+      <div class="gp-sub" id="gp-sub"></div>
+    </div>
+
+    <div class="gp-controls">
+      <button id="gp-prev" title="Previous">«</button>
+      <button id="gp-play" title="Play/Pause">▶</button>
+      <button id="gp-next" title="Next">»</button>
+    </div>
+
+    <div class="gp-progress">
+      <input id="gp-seek" type="range" min="0" max="1000" value="0">
+      <div class="gp-time">
+        <span id="gp-cur">0:00</span> / <span id="gp-dur">0:00</span>
+      </div>
+    </div>
+
+    <div class="gp-right">
+      <input id="gp-vol" type="range" min="0" max="1" step="0.01" value="0.85" title="Volume">
+    </div>
+
+    <audio id="gp-audio" preload="metadata"></audio>
+  </div>
+
   {% block scripts %}{% endblock %}
+
+  <!-- Global player JS should load after markup -->
+  <script src="{{ url_for('static', filename='js/global_player.js') }}"></script>
 </body>
 </html>
