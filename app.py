@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import os
-from flask import Flask
+from flask import Flask, render_template
 
 from config import (
     UPLOAD_FOLDER,
@@ -69,6 +69,9 @@ def create_app() -> Flask:
                 _HEADLINES_CACHE["items"] = []
         return {"headlines": _HEADLINES_CACHE["items"]}
 
+    @app.route("/player")
+    def player_page():
+        return render_template("player.html")
 
 
     # Register route groups (no blueprints; endpoints preserved)

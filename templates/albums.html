@@ -49,12 +49,14 @@
         padding: 10px;
         width: 300px;
     }
+
     .tracklist {
-    list-style: none;
-    padding: 0;
-    margin-top: 6px;
-    font-size: 0.9em;
-}
+        list-style: none;
+        padding: 0;
+        margin-top: 6px;
+        font-size: 0.9em;
+    }
+
     .track {
         cursor: pointer;
         padding: 3px 0;
@@ -161,7 +163,7 @@
                                         "album_id": {{ album.id }},
                                         "album_title": {{ (album.title or 'Unknown Album')|tojson }},
                                         "artist": {{ (album.artist or '')|tojson }},
-                                        "title": {{ (f.split('-', 2)[-1].rsplit('.', 1)[0])|tojson }},
+                                        "title": {{ (f.split('/')[-1].rsplit('.', 1)[0])|tojson }},
                                         "url": {{ url_for('static', filename='audio/' ~ f)|tojson }}
                                     }{% if not loop.last %},{% endif %}
                                     {% endfor %}
@@ -175,20 +177,19 @@
                                     ▶ Play
                                 </button>
 
-                                {% if album.audio_files|length > 1 %}
-                                    <ul class="tracklist">
-                                    {% for f in album.audio_files %}
-                                        <li class="track play-track"
-                                            role="button"
-                                            tabindex="0"
-                                            data-album-id="{{ album.id }}"
-                                            data-index="{{ loop.index0 }}">
-                                        {{ loop.index }}.
-                                        {{ f.split('-', 2)[-1].rsplit('.', 1)[0] }}
-                                        </li>
-                                    {% endfor %}
-                                    </ul>
-                                {% endif %}
+                                {# Show a tracklist for 1+ tracks #}
+                                <ul class="tracklist">
+                                {% for f in album.audio_files %}
+                                    <li class="track play-track"
+                                        role="button"
+                                        tabindex="0"
+                                        data-album-id="{{ album.id }}"
+                                        data-index="{{ loop.index0 }}">
+                                        {{ f.split('/')[-1].rsplit('.', 1)[0] }}
+                                    </li>
+                                {% endfor %}
+                                </ul>
+
                                 </div>
 
                             {% else %}
@@ -255,92 +256,6 @@
       const idx = parseInt(playTrackLi.dataset.index, 10) || 0;
       playAlbum(albumId, idx);
     }
-  });
-</script>
-<script>
-  const baseAudioUrl = "{{ url_for('static', filename='audio/') }}";
-
-  function setActiveTrack(playerId, idx) {
-    const tracks = Array.from(document.querySelectorAll(`.track[data-player="${playerId}"]`));
-    if (!tracks.length) return null;
-
-    // clamp + wrap
-    idx = (idx + tracks.length) % tracks.length;
-
-    tracks.forEach(t => t.classList.remove("active"));
-    tracks[idx].classList.add("active");
-    return tracks[idx];
-  }
-
-  function playTrackEl(trackEl) {
-    if (!trackEl) return;
-    const playerId = trackEl.dataset.player;
-    const player = document.getElementById(playerId);
-    if (!player) return;
-
-    const file = trackEl.dataset.file;
-    player.src = baseAudioUrl + encodeURIComponent(file);
-    player.load();
-    player.play().catch(() => {});
-  }
-
-  function getActiveIndex(playerId) {
-    const tracks = Array.from(document.querySelectorAll(`.track[data-player="${playerId}"]`));
-    return tracks.findIndex(t => t.classList.contains("active"));
-  }
-
-  document.addEventListener("click", function (e) {
-    // Click a track
-    const track = e.target.closest(".track");
-    if (track) {
-      // activate it and play
-      const playerId = track.dataset.player;
-      const tracks = Array.from(document.querySelectorAll(`.track[data-player="${playerId}"]`));
-      const idx = tracks.indexOf(track);
-      playTrackEl(setActiveTrack(playerId, idx));
-      return;
-    }
-
-    // Prev / Next
-    const prevBtn = e.target.closest(".prev-track");
-    const nextBtn = e.target.closest(".next-track");
-
-    if (prevBtn || nextBtn) {
-      const playerId = (prevBtn || nextBtn).dataset.player;
-
-      // if nothing active yet, default to first track
-      let idx = getActiveIndex(playerId);
-      if (idx === -1) idx = 0;
-
-      idx = prevBtn ? (idx - 1) : (idx + 1);
-      playTrackEl(setActiveTrack(playerId, idx));
-      return;
-    }
-  });
-
-  // Auto advance to next track when one ends
-  document.addEventListener("ended", function (e) {
-    const player = e.target;
-    if (!player || !player.id) return;
-
-    const playerId = player.id;
-    const tracks = Array.from(document.querySelectorAll(`.track[data-player="${playerId}"]`));
-    if (!tracks.length) return;
-
-    let idx = getActiveIndex(playerId);
-    if (idx === -1) idx = 0;
-    idx = idx + 1;
-
-    playTrackEl(setActiveTrack(playerId, idx));
-  }, true);
-
-  // Optional: set the first track active on load (so prev/next works immediately)
-  document.addEventListener("DOMContentLoaded", function () {
-    document.querySelectorAll(".album-player").forEach(wrapper => {
-      const playerId = wrapper.dataset.playerId;
-      if (!playerId) return;
-      if (getActiveIndex(playerId) === -1) setActiveTrack(playerId, 0);
-    });
   });
 </script>
 

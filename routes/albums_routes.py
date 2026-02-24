@@ -14,7 +14,7 @@ from config import THUMBNAIL_FOLDER
 import routes.discogs_routes as discogs
 
 
-AUDIO_EXTS = {".mp3", ".m4a", ".wav", ".ogg"}
+AUDIO_EXTS = {".mp3", ".m4a", ".wav", ".ogg", ".flac", ".aiff", ".aif"}
 
 
 def _norm(s: str) -> str:
@@ -24,26 +24,65 @@ def _norm(s: str) -> str:
     s = re.sub(r"-{2,}", "-", s).strip("-")
     return s
 
-
 def _list_audio_dir() -> list[str]:
-    folder = os.path.join(current_app.static_folder, "audio")
-    if not os.path.isdir(folder):
+    """
+    Return audio file paths *relative* to /static/audio, recursively.
+    Example: "Samhain/Initium/01 Initium.m4a"
+    """
+    root = os.path.join(current_app.static_folder, "audio")
+    if not os.path.isdir(root):
         return []
-    files: list[str] = []
-    for name in os.listdir(folder):
-        if name.startswith("."):
-            continue
-        ext = os.path.splitext(name)[1].lower()
-        if ext in AUDIO_EXTS:
-            files.append(name)
-    return sorted(files)
 
+    files: list[str] = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        # skip hidden dirs
+        dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+
+        for name in filenames:
+            if name.startswith("."):
+                continue
+            ext = os.path.splitext(name)[1].lower()
+            if ext not in AUDIO_EXTS:
+                continue
+
+            full = os.path.join(dirpath, name)
+            rel = os.path.relpath(full, root)          # Artist/Album/Track.ext
+            rel = rel.replace(os.sep, "/")             # normalize for URLs/templates
+            files.append(rel)
+
+    return sorted(files, key=lambda s: s.lower())
 
 def _match_album_audio_files(all_files: list[str], artist: str, title: str) -> list[str]:
-    # filenames like: Artist-Album-TrackName.mp3
-    key = f"{_norm(artist)}-{_norm(title)}-"
-    return [f for f in all_files if _norm(f).startswith(key)]
+    """
+    Match files by directory structure:
+      /static/audio/<Artist>/<Album>/<Track>
+    all_files entries are relative paths like "Artist/Album/Track.ext".
+    """
+    artist_key = _norm(artist)
+    album_key = _norm(title)
 
+    exact: list[str] = []
+    fuzzy: list[str] = []
+
+    for rel in all_files:
+        parts = rel.split("/")
+        if len(parts) < 3:
+            continue
+
+        rel_artist, rel_album = parts[0], parts[1]
+        ra = _norm(rel_artist)
+        rb = _norm(rel_album)
+
+        # exact normalized match
+        if ra == artist_key and rb == album_key:
+            exact.append(rel)
+            continue
+
+        # fuzzy fallback (helps when titles differ slightly: deluxe, punctuation, etc.)
+        if ra == artist_key and (rb.startswith(album_key) or album_key.startswith(rb) or album_key in rb):
+            fuzzy.append(rel)
+
+    return exact if exact else fuzzy
 
 def get_existing_artists_and_genres():
     db = get_db()
@@ -83,7 +122,7 @@ def register_albums_routes(app):
 
             album = {
                 "id": row["id"],
-                "artist": artist,  # IMPORTANT: include this so matching works
+                "artist": artist,
                 "title": row["title"],
                 "release_date": row["release_date"],
                 "genre": row["genre"],
@@ -97,7 +136,7 @@ def register_albums_routes(app):
 
         unique_genres = sorted(genres, key=lambda s: s.lower())
 
-        # Attach audio_files per album by matching filenames in /static/audio
+        # Attach audio_files per album by matching directory structure in /static/audio
         all_audio_files = _list_audio_dir()
         for artist_name, albums_by_artist in albums.items():
             for a in albums_by_artist:
@@ -106,7 +145,8 @@ def register_albums_routes(app):
                     a.get("artist", artist_name),
                     a.get("title", ""),
                 )
-            print(a["artist"], "-", a["title"], "=>", len(a["audio_files"]), a["audio_files"][:5])
+                # Debug (optional)
+                # print(a["artist"], "-", a["title"], "=>", len(a["audio_files"]), a["audio_files"][:5])
 
         return render_template("albums.html", albums=albums, unique_genres=unique_genres)
 
